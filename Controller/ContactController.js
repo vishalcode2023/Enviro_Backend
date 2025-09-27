@@ -3,7 +3,7 @@ const {
   contactValidationSchema,
   ContactModel,
 } = require("../Models/ContactModel");
-const  EnviroModel  = require("../Models/EnviroModel");
+const EnviroModel = require("../Models/EnviroModel");
 
 module.exports.ContactController = async (req, res) => {
   try {
@@ -20,6 +20,9 @@ module.exports.ContactController = async (req, res) => {
 
     const newContact = new ContactModel({ name, email, message });
     await newContact.save();
+
+    console.log("Using Gmail user:", process.env.EMAIL_USER);
+    console.log("App Password length:", process.env.EMAIL_PASS?.length);
 
     const transporter = nodemailer.createTransport({
       service: "gmail",
@@ -111,11 +114,9 @@ module.exports.enviroController = async (req, res) => {
 
     await transporter.sendMail(mailOptions);
 
-    res
-      .status(201)
-      .json({
-        message: "Contact entry created and email sent to owner successfully",
-      });
+    res.status(201).json({
+      message: "Contact entry created and email sent to owner successfully",
+    });
   } catch (error) {
     console.error("Error creating contact entry:", error);
     res.status(500).json({ error: "Internal server error" });
