@@ -1,124 +1,115 @@
-const nodemailer = require("nodemailer");
-const {
-  contactValidationSchema,
-  ContactModel,
-} = require("../Models/ContactModel");
+const sgMail = require("@sendgrid/mail");
+const ContactModel = require("../Models/ContactModel");
 const EnviroModel = require("../Models/EnviroModel");
 
-module.exports.ContactController = async (req, res) => {
+// Set SendGrid API key globally
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+const ContactController = async (req, res) => {
   try {
     const { name, email, message } = req.body;
 
-    const { error } = contactValidationSchema.validate({
-      name,
-      email,
-      message,
-    });
-    if (error) {
-      return res.status(400).json({ error: error.details[0].message });
-    }
-
+    // Save to DB
     const newContact = new ContactModel({ name, email, message });
     await newContact.save();
 
-    console.log("Using Gmail user:", process.env.EMAIL_USER);
-    console.log("App Password length:", process.env.EMAIL_PASS?.length);
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER,
-      subject: `📬 New Contact Message from ${name}`,
-      html: `
-    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px; background: #f9f9f9; max-width: 600px; margin: auto;">
-      <h2 style="color: #2c3e50;">📩 New Contact Form Submission</h2>
-      <p style="font-size: 16px; color: #333;"><strong>Name:</strong> ${name}</p>
-      <p style="font-size: 16px; color: #333;"><strong>Email:</strong> ${email}</p>
-      <p style="font-size: 16px; color: #333;"><strong>Message:</strong></p>
-      <div style="background: #fff; padding: 15px; border-radius: 5px; border: 1px solid #ccc; font-size: 15px; color: #555;">
-        ${message}
-      </div>
-      <hr style="margin-top: 30px;">
-      <footer style="font-size: 12px; color: #888; text-align: center; margin-top: 20px;">
-        This message was sent via your website's contact form.
-      </footer>
-    </div>
-  `,
-    };
-
-    // ✅ Send the email
-    await transporter.sendMail(mailOptions);
-
-    res
-      .status(201)
-      .json({ message: "Contact entry created and email sent successfully" });
-  } catch (error) {
-    console.error("Error creating contact entry:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-module.exports.enviroController = async (req, res) => {
-  try {
-    const { name, email, phone, subject, message } = req.body;
-
-    // Save contact entry to DB
-    const newContact = new EnviroModel({
-      name,
-      email,
-      phone,
-      subject,
-      message,
-    });
-    await newContact.save();
-
-    // Nodemailer transporter (your Gmail + App Password)
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER, // your Gmail for sending
-        pass: process.env.EMAIL_PASS, // your Gmail App Password
-      },
-    });
-
-    // Send to the Enviro owner's Gmail
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: process.env.ENVIRO_OWNER_EMAIL, // 👈 store owner's email in .env
+    // Email content
+    const msg = {
+      to: process.env.ENVIRO_OWNER_EMAIL,   // your verified Enviro email
+      from: process.env.ENVIRO_OWNER_EMAIL, // must be verified in SendGrid
       subject: `📬 New Contact Message from ${name}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px; background: #f9f9f9; max-width: 600px; margin: auto;">
           <h2 style="color: #2c3e50;">📩 New Contact Form Submission</h2>
-          <p style="font-size: 16px; color: #333;"><strong>Name:</strong> ${name}</p>
-          <p style="font-size: 16px; color: #333;"><strong>Email:</strong> ${email}</p>
-          <p style="font-size: 16px; color: #333;"><strong>Phone:</strong> ${phone}</p>
-          <p style="font-size: 16px; color: #333;"><strong>Subject:</strong> ${subject}</p>
-          <p style="font-size: 16px; color: #333;"><strong>Message:</strong></p>
-          <div style="background: #fff; padding: 15px; border-radius: 5px; border: 1px solid #ccc; font-size: 15px; color: #555;">
-            ${message}
-          </div>
-          <hr style="margin-top: 30px;">
-          <footer style="font-size: 12px; color: #888; text-align: center; margin-top: 20px;">
-            This message was sent via your website's contact form.
-          </footer>
+          <p><strong>Name:</strong> ${name}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Message:</strong></p>
+          <div style="background: #fff; padding: 15px; border-radius: 5px; border: 1px solid #ccc;">${message}</div>
         </div>
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    // Send email
+    await sgMail.send(msg);
 
     res.status(201).json({
-      message: "Contact entry created and email sent to owner successfully",
+      message: "Contact entry created and email sent successfully via SendGrid API",
     });
   } catch (error) {
     console.error("Error creating contact entry:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
+const enviroController = async (req, res) => {
+    // We assume 'sgMail' (SendGrid) and 'EnviroModel' (Mongoose) are correctly imported/defined.
+    try {
+        const { name, email, phone, subject, message } = req.body;
+
+        // 1. Validate mandatory fields early
+        if (!name || !email || !subject || !message) {
+            return res.status(400).json({ error: "Missing required contact fields (name, email, subject, message)." });
+        }
+
+        // --- Database Save ---
+        const newContact = new EnviroModel({ name, email, phone, subject, message });
+        await newContact.save();
+        console.log("Contact entry saved to database successfully.");
+
+        // --- Email Setup ---
+        const msg = {
+            // Note: SendGrid requires the 'from' email to be a verified sender
+            to: process.env.ENVIRO_OWNER_EMAIL,
+            from: process.env.ENVIRO_OWNER_EMAIL, 
+            subject: `📬 New Contact Message from ${name} (via Enviro App)`,
+            html: `
+                <div style="font-family: 'Inter', Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background: #ffffff; max-width: 600px; margin: auto; box-shadow: 0 4px 8px rgba(0,0,0,0.05);">
+                    <h2 style="color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px;">📩 New Contact Form Submission</h2>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                        <tr><td style="padding: 8px 0;"><strong>Name:</strong></td><td style="padding: 8px 0;">${name}</td></tr>
+                        <tr><td style="padding: 8px 0;"><strong>Email:</strong></td><td style="padding: 8px 0;"><a href="mailto:${email}" style="color: #1a73e8;">${email}</a></td></tr>
+                        <tr><td style="padding: 8px 0;"><strong>Phone:</strong></td><td style="padding: 8px 0;">${phone || 'N/A'}</td></tr>
+                        <tr><td style="padding: 8px 0;"><strong>Subject:</strong></td><td style="padding: 8px 0;">${subject}</td></tr>
+                    </table>
+                    <p style="margin-top: 20px;"><strong>Message:</strong></p>
+                    <div style="background: #f4f4f9; padding: 15px; border-radius: 8px; border-left: 5px solid #1a73e8; color: #333;">${message}</div>
+                    <p style="font-size: 12px; color: #777; margin-top: 25px; text-align: center;">This message was automatically generated by the Enviro contact form.</p>
+                </div>
+            `,
+        };
+
+        // --- Send Email with Error Handling ---
+        try {
+            await sgMail.send(msg);
+            console.log("Email sent successfully via SendGrid API.");
+        } catch (emailError) {
+            // Log a specific error if the email fails but the DB save succeeded
+            console.error("--- SENDGRID API ERROR ---");
+            console.error("Failed to send email. Check SENDGRID_API_KEY and sender verification status.");
+            // Log the actual error object from SendGrid, which often contains the status code
+            console.error("SendGrid Error Details:", emailError.response ? emailError.response.body : emailError);
+
+            // You might want to proceed to return a success status, 
+            // since the core data (the contact) was saved to the DB.
+            // However, for this example, we return a server error to indicate failure in the main task.
+            // Note: If you want to proceed with a 201 response despite the email failure, change the return here.
+            return res.status(500).json({ 
+                error: "Contact saved to database, but failed to send notification email. Check server logs.",
+            });
+        }
+
+        // --- Success Response ---
+        res.status(201).json({
+            message: "Contact entry created and email sent successfully.",
+        });
+
+    } catch (dbError) {
+        // Catches errors related to Mongoose/Database
+        console.error("--- DATABASE/CONTROLLER ERROR ---");
+        console.error("Error creating contact entry or validation failed:", dbError);
+        res.status(500).json({ error: "Internal server error: Failed to process request or save to database." });
+    }
+};
+
+
+module.exports = { ContactController, enviroController };

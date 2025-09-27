@@ -19,6 +19,10 @@ connectDB();
 
 app.use('/api', mainRouter);
 
+app.get('/ping',(req,res) => {
+  res.send('ping').status(200);
+})
+
 app.listen(process.env.PORT || 5000, () => {
   console.log(`Server is running on port ${process.env.PORT || 5000}`);
 });
