@@ -17,7 +17,7 @@ const ContactController = async (req, res) => {
 
     // Send Email using Resend
     await resend.emails.send({
-      from: "Enviro <onboarding@resend.dev>", // ✅ verified sender
+      from: "Enviro<notification.envirosafetyglass.com>", //  verified sender
       to: process.env.ENVIRO_OWNER_EMAIL,
       subject: `📬 New Contact Message from ${name}`,
       html: `
